@@ -13,12 +13,15 @@ function TableNode({ id, data, selected }) {
   const { table } = data;
   const updateTable = useStore(s => s.updateTable);
   const addColumn = useStore(s => s.addColumn);
+  const updateColumn = useStore(s => s.updateColumn);
   const showContextMenu = useStore(s => s.showContextMenu);
   const setSelectedTableIds = useStore(s => s.setSelectedTableIds);
   const editMode = useStore(s => s.editMode);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(table.name);
+  const [editingColumnId, setEditingColumnId] = useState(null);
+  const [editColumnName, setEditColumnName] = useState('');
 
   const handleNameDoubleClick = useCallback((e) => {
     if (!editMode) return;
@@ -45,8 +48,25 @@ function TableNode({ id, data, selected }) {
 
   const handleAddColumn = useCallback((e) => {
     e.stopPropagation();
+    if (!editMode) return;
     addColumn(id);
-  }, [addColumn, id]);
+  }, [addColumn, id, editMode]);
+
+  const startEditColumnName = useCallback((e, col) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    setEditingColumnId(col.id);
+    setEditColumnName(col.name);
+  }, [editMode]);
+
+  const submitColumnName = useCallback((col) => {
+    const trimmed = editColumnName.trim();
+    if (trimmed && trimmed !== col.name) {
+      updateColumn(id, col.id, { name: trimmed.replace(/\s+/g, '_') });
+    }
+    setEditingColumnId(null);
+    setEditColumnName('');
+  }, [editColumnName, id, updateColumn]);
 
   return (
     <div
@@ -61,7 +81,7 @@ function TableNode({ id, data, selected }) {
         {isEditingName ? (
           <input
             autoFocus
-            className="bg-transparent text-white outline-none border-b border-white/50 w-full text-sm font-semibold"
+            className="nodrag nopan bg-transparent text-white outline-none border-b border-white/50 w-full text-sm font-semibold"
             value={editName}
             onChange={e => setEditName(e.target.value)}
             onBlur={handleNameSubmit}
@@ -73,7 +93,7 @@ function TableNode({ id, data, selected }) {
           />
         ) : (
           <span
-            className="truncate cursor-text"
+            className="nodrag nopan truncate cursor-text"
             onDoubleClick={handleNameDoubleClick}
             title={table.name}
           >
@@ -114,7 +134,31 @@ function TableNode({ id, data, selected }) {
                   ? '🔗'
                   : ''}
               </span>
-              <span className="col-name">{col.name}</span>
+              {editingColumnId === col.id ? (
+                <input
+                  autoFocus
+                  className="nodrag nopan col-name bg-transparent outline-none border-b border-blue-400/60"
+                  value={editColumnName}
+                  onChange={e => setEditColumnName(e.target.value)}
+                  onBlur={() => submitColumnName(col)}
+                  onClick={e => e.stopPropagation()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') submitColumnName(col);
+                    if (e.key === 'Escape') {
+                      setEditingColumnId(null);
+                      setEditColumnName('');
+                    }
+                  }}
+                />
+              ) : (
+                <span
+                  className={`nodrag nopan col-name ${editMode ? 'cursor-text' : ''}`}
+                  onClick={(e) => startEditColumnName(e, col)}
+                  title={editMode ? 'Click to edit column name' : col.name}
+                >
+                  {col.name}
+                </span>
+              )}
               <span className="col-type">{col.type}</span>
               <span className="text-[11px] text-gray-400 flex gap-0.5">
                 {col.constraints.notNull && (
@@ -142,7 +186,7 @@ function TableNode({ id, data, selected }) {
           {/* Add column button */}
           {editMode && (
             <button
-              className="w-full px-3 py-1 text-xs text-gray-400 hover:text-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
+              className="nodrag nopan w-full px-3 py-1 text-xs text-gray-400 hover:text-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700 text-left"
               onClick={handleAddColumn}
             >
               + Add column

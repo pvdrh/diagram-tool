@@ -151,6 +151,21 @@ function localDataPlugin() {
             return;
           }
 
+          const tokenProjectId = activeTokens.get(token);
+          if (tokenProjectId !== projectId) {
+            res.statusCode = 403;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: 'Not authorized for this project' }));
+            return;
+          }
+
+          if (!newPassword || !newPassword.trim()) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: 'New password cannot be empty' }));
+            return;
+          }
+
           const project = readProject(projectId);
           if (!project) {
             res.statusCode = 404;
