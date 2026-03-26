@@ -15,23 +15,29 @@ export default async function handler(req, res) {
       if (!blob) return json(res, { darkMode: false });
       const r = await fetch(blob.url);
       return json(res, await r.json());
-    } catch {
+    } catch (e) {
+      console.error("GET Meta Error:", e);
       return json(res, { darkMode: false });
     }
   }
 
   if (req.method === 'POST') {
-    let body = req.body;
-    if (typeof body !== 'object') {
-      try { body = JSON.parse(body); } catch { return json(res, { error: 'Invalid JSON' }, 400); }
+    try {
+      let body = req.body;
+      if (typeof body !== 'object') {
+        try { body = JSON.parse(body); } catch { return json(res, { error: 'Invalid JSON' }, 400); }
+      }
+      await put(META_BLOB_PATH, JSON.stringify(body), {
+        access: 'public',
+        contentType: 'application/json',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      });
+      return json(res, { ok: true });
+    } catch (e) {
+      console.error("POST Meta Error:", e);
+      return json(res, { error: e.message || 'Error saving meta' }, 500);
     }
-    await put(META_BLOB_PATH, JSON.stringify(body), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
-    return json(res, { ok: true });
   }
 
   return json(res, { error: 'Method not allowed' }, 405);

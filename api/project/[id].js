@@ -23,33 +23,43 @@ export default async function handler(req, res) {
       const blob = await findBlob(blobPath);
       if (!blob) return json(res, { error: 'Not found' }, 404);
       const r = await fetch(blob.url);
+      if (!r.ok) return json(res, { error: 'Failed to fetch blob contents' }, 500);
       const data = await r.json();
       return json(res, data);
-    } catch {
-      return json(res, { error: 'Not found' }, 404);
+    } catch (e) {
+      console.error("GET [id] Error:", e);
+      return json(res, { error: 'Internal Server Error' }, 500);
     }
   }
 
   if (req.method === 'POST') {
-    let body = req.body;
-    if (typeof body !== 'object') {
-      try { body = JSON.parse(body); } catch { return json(res, { error: 'Invalid JSON' }, 400); }
+    try {
+      let body = req.body;
+      if (typeof body !== 'object') {
+        try { body = JSON.parse(body); } catch { return json(res, { error: 'Invalid JSON' }, 400); }
+      }
+      await put(blobPath, JSON.stringify(body), {
+        access: 'public',
+        contentType: 'application/json',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      });
+      return json(res, { ok: true });
+    } catch (e) {
+      console.error("POST [id] Error:", e);
+      return json(res, { error: e.message || 'Error saving project' }, 500);
     }
-    await put(blobPath, JSON.stringify(body), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
-    return json(res, { ok: true });
   }
 
   if (req.method === 'DELETE') {
     try {
       const blob = await findBlob(blobPath);
       if (blob) await del(blob.url);
-    } catch { /* already gone */ }
-    return json(res, { ok: true });
+      return json(res, { ok: true });
+    } catch (e) {
+      console.error("DELETE [id] Error:", e);
+      return json(res, { error: e.message || 'Error deleting project' }, 500);
+    }
   }
 
   return json(res, { error: 'Method not allowed' }, 405);
