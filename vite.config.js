@@ -246,23 +246,17 @@ function localDataPlugin() {
       });
 
       // GET /api/projects — list all projects
+      server.middlewares.use('/api/projects', (req, res, next) => {
+        if (req.method !== 'GET') return next();
+        const projects = listProjects();
+        console.log(`[API] GET /api/projects returned ${projects.length} projects`);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(projects));
+      });
+
       // /api/project/:id — GET read, POST write, DELETE remove
-      // IMPORTANT: single handler to avoid /api/projects vs /api/project routing conflict
       server.middlewares.use('/api/project', async (req, res, next) => {
-        const urlPath = req.url.split('?')[0].replace(/^\//, '');
-
-        // /api/projects (urlPath = 's' after stripping '/api/project' prefix + leading slash)
-        if (urlPath === 's') {
-          if (req.method !== 'GET') return next();
-          const projects = listProjects();
-          console.log(`[API] GET /api/projects returned ${projects.length} projects`);
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(projects));
-          return;
-        }
-
-        // /api/project/<id>
-        const projectId = urlPath;
+        const projectId = req.url.split('?')[0].replace(/^\//, '');
         if (!projectId) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: 'Missing project ID' }));
@@ -282,27 +276,16 @@ function localDataPlugin() {
         }
 
         if (req.method === 'POST') {
-          const authHeader = req.headers['x-edit-token'];
-          const hasValidToken = authHeader && activeTokens.has(authHeader);
-
-          // Allow writing without token only if the project file doesn't exist yet (bootstrap/create)
-          if (!hasValidToken) {
-            const existing = readProject(projectId);
-            if (existing) {
-              res.statusCode = 403;
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ error: 'Not authorized to edit' }));
-              return;
-            }
-          }
-
+          // Local dev tool: allow all writes (password lock is UI-level only)
           const body = await readBody(req);
           try {
             const data = JSON.parse(body);
             writeProject(projectId, data);
+            console.log(`[API] POST /api/project/${projectId} — saved (${body.length} bytes)`);
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ ok: true }));
           } catch (err) {
+            console.error(`[API] POST /api/project/${projectId} — error:`, err.message);
             res.statusCode = 400;
             res.end(JSON.stringify({ error: err.message }));
           }
@@ -310,13 +293,8 @@ function localDataPlugin() {
         }
 
         if (req.method === 'DELETE') {
-          const authHeader = req.headers['x-edit-token'];
-          if (!authHeader || !activeTokens.has(authHeader)) {
-            res.statusCode = 403;
-            res.end(JSON.stringify({ error: 'Not authorized' }));
-            return;
-          }
           deleteProjectFile(projectId);
+          console.log(`[API] DELETE /api/project/${projectId} — removed`);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ok: true }));
           return;

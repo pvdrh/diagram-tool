@@ -231,6 +231,13 @@ const useStore = create((set, get) => ({
   },
 
   async createProjectWithPassword(name, password) {
+    // Save current project and release edit lock first
+    await get().saveToStorage();
+    if (get().editMode) {
+      await lockEdit();
+      set({ editMode: false });
+    }
+
     const id = nanoid();
     const passwordHash = await hashPasswordClient(password);
     const newProject = { id, name: name || 'Untitled', dbmlContent: '', positionsByName: {}, tablesMeta: {}, passwordHash };

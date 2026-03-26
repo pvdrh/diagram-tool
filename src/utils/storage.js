@@ -144,32 +144,34 @@ export async function loadProjectFromFile(projectId) {
 
 /** Save a single project to server */
 export async function saveProjectToFile(projectId, data) {
-  const token = getEditToken();
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['X-Edit-Token'] = token;
   try {
-    await fetch(`/api/project/${projectId}`, {
+    const res = await fetch(`/api/project/${projectId}`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data, null, 2),
     });
-  } catch {
-    // API not available
+    if (!res.ok) {
+      console.error(`[Storage] Save failed for project ${projectId}: ${res.status} ${res.statusText}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Storage] Save error:', err);
+    return false;
   }
 }
 
 /** Delete a project file on server */
 export async function deleteProjectFromFile(projectId) {
-  const token = getEditToken();
-  const headers = {};
-  if (token) headers['X-Edit-Token'] = token;
   try {
-    await fetch(`/api/project/${projectId}`, {
+    const res = await fetch(`/api/project/${projectId}`, {
       method: 'DELETE',
-      headers,
     });
-  } catch {
-    // API not available
+    if (!res.ok) {
+      console.error(`[Storage] Delete failed for project ${projectId}: ${res.status} ${res.statusText}`);
+    }
+  } catch (err) {
+    console.error('[Storage] Delete error:', err);
   }
 }
 
