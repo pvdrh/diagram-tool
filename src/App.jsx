@@ -20,9 +20,16 @@ export default function App() {
   const loadSharedData = useStore(s => s.loadSharedData);
 
   useEffect(() => {
+    // DEBUG: Clear localStorage if empty to force reload from server
+    const keyExists = localStorage.getItem('er-diagram-tool');
+    if (!keyExists) {
+      console.log('[App] localStorage is empty, will load projects from server');
+    }
+
     // Check if URL has shared data first
     loadSharedData().then(loaded => {
       if (!loaded) {
+        console.log('[App] No shared data, initializing projects');
         initialize();
         checkAuth();
       }

@@ -73,12 +73,15 @@ function deleteProjectFile(id) {
 function listProjects() {
   ensureDirs();
   const files = fs.readdirSync(path.resolve(PROJECTS_DIR)).filter(f => f.endsWith('.json'));
+  console.log(`[API] Found ${files.length} project files in ${PROJECTS_DIR}: ${files.join(', ')}`);
   const projects = [];
   for (const f of files) {
     try {
       const data = JSON.parse(fs.readFileSync(path.resolve(PROJECTS_DIR, f), 'utf-8'));
       projects.push(data);
-    } catch { /* skip corrupt files */ }
+    } catch (err) {
+      console.error(`[API] Error reading ${f}:`, err.message);
+    }
   }
   return projects;
 }
@@ -241,6 +244,7 @@ function localDataPlugin() {
         if (urlPath === 's') {
           if (req.method !== 'GET') return next();
           const projects = listProjects();
+          console.log(`[API] GET /api/projects returned ${projects.length} projects`);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(projects));
           return;

@@ -1,33 +1,32 @@
 /**
- * Share link utilities — save share data on the server, use short ID in URL.
+ * Share link utilities — encode share data into URL (no server required).
  */
+import { compress, decompress } from 'lz-string';
 
 /**
- * Create a share on the server. Returns the short share ID.
+ * Create a share by encoding data into URL hash.
+ * Returns a base64 string that will be used as #share=<data>
  */
 export async function createShare(data) {
   try {
-    const res = await fetch('/api/share', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) return null;
-    const result = await res.json();
-    return result.id || null;
+    const json = JSON.stringify(data);
+    // Compress + encode to reduce URL length
+    const compressed = compress(json);
+    const encoded = btoa(compressed);
+    return encoded;
   } catch {
     return null;
   }
 }
 
 /**
- * Load share data from the server by ID.
+ * Load share data from encoded URL hash.
  */
-export async function loadShare(id) {
+export async function loadShare(encoded) {
   try {
-    const res = await fetch(`/api/share/${id}`);
-    if (!res.ok) return null;
-    return await res.json();
+    const compressed = atob(encoded);
+    const json = decompress(compressed);
+    return JSON.parse(json);
   } catch {
     return null;
   }

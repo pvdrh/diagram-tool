@@ -1,8 +1,6 @@
 import { useRef, useCallback, useState } from 'react';
 import useStore from '../store/useStore';
 import { downloadFile, readFileAsText, exportAsPNG, exportAsSVG } from '../utils/exportUtils';
-import { generateSQL } from '../utils/sqlGenerator';
-import { parseDBML } from '../utils/dbmlParser';
 import { importSQL } from '../utils/sqlImporter';
 import { generateDBML } from '../utils/dbmlGenerator';
 
@@ -212,9 +210,9 @@ export default function Toolbar() {
       <button
         onClick={handleShareLink}
         className={`toolbar-btn ${shareCopied ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : ''}`}
-        title="Tạo link chia sẻ (view-only)"
+        title="Create a sharing link (view-only)"
       >
-        {shareCopied ? '✓ Đã copy!' : '🔗 Share'}
+        {shareCopied ? '✓ Copied!' : '🔗 Share'}
       </button>
 
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
@@ -235,7 +233,7 @@ export default function Toolbar() {
             disabled={!editMode}
           >
             <div className="text-sm font-medium">↔ Left-Right</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Theo hướng quan hệ trái→phải. Phù hợp ETL pipeline.</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Left-to-right relationship direction. Suitable for ETL pipeline.</div>
           </button>
           <button
             onClick={() => useStore.getState().autoArrangePositions('snowflake')}
@@ -243,7 +241,7 @@ export default function Toolbar() {
             disabled={!editMode}
           >
             <div className="text-sm font-medium">❄ Snowflake</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Bảng nhiều quan hệ ở giữa, toả ra xung quanh. Phù hợp data warehouse.</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Many-to-many relationships in the center, spreading outwards. Suitable for data warehouse.</div>
           </button>
           <button
             onClick={() => useStore.getState().autoArrangePositions('compact')}
@@ -251,7 +249,7 @@ export default function Toolbar() {
             disabled={!editMode}
           >
             <div className="text-sm font-medium">▦ Compact</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Xếp gọn dạng lưới hình chữ nhật. Phù hợp ít quan hệ.</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Compact grid layout. Suitable for fewer relationships.</div>
           </button>
         </div>
       </div>
@@ -280,7 +278,7 @@ export default function Toolbar() {
         <button
           onClick={() => openModal('changePassword', null)}
           className="toolbar-btn"
-          title="Đổi mật khẩu project"
+          title="Change project password"
         >
           🔑
         </button>
@@ -290,7 +288,7 @@ export default function Toolbar() {
       <button
         onClick={toggleHighlightEdges}
         className={`toolbar-btn ${highlightEdges ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : ''}`}
-        title={highlightEdges ? 'Tắt highlight quan hệ' : 'Bật highlight quan hệ'}
+        title={highlightEdges ? 'Turn off edge highlighting' : 'Turn on edge highlighting'}
       >
         {highlightEdges ? '🔗 Edges' : '🔗'}
       </button>
@@ -299,7 +297,7 @@ export default function Toolbar() {
       <button
         onClick={toggleSnapToGrid}
         className={`toolbar-btn ${snapToGrid ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''}`}
-        title="Toggle snap to grid"
+        title={snapToGrid ? 'Turn off snap to grid' : 'Turn on snap to grid'}
       >
         ⊞ Grid
       </button>

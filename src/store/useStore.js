@@ -170,8 +170,11 @@ const useStore = create((set, get) => ({
 
   // --- Initialize ---
   async initialize() {
+    console.log('[Store] Initializing projects from storage...');
     const saved = await loadFromStorage();
+    console.log('[Store] Loaded data:', saved);
     if (saved && saved.projects && saved.projects.length > 0) {
+      console.log('[Store] Found', saved.projects.length, 'projects');
       const activeId = saved.activeProjectId || saved.projects[0].id;
       const project = saved.projects.find(p => p.id === activeId) || saved.projects[0];
       const parsed = parseDBML(project.dbmlContent || '');
@@ -192,6 +195,7 @@ const useStore = create((set, get) => ({
       });
     } else {
       // No saved data — start with empty project list
+      console.log('[Store] No projects found, starting with empty list');
       set({
         projects: [],
         activeProjectId: null,
@@ -210,16 +214,6 @@ const useStore = create((set, get) => ({
 
     const localProject = projects.find(p => p.id === activeProjectId);
     if (!localProject) return;
-
-    // If in edit mode, check if the project's password was changed externally
-    if (editMode && localProject.passwordHash) {
-      const fresh = await loadProjectFromFile(activeProjectId);
-      if (fresh && fresh.passwordHash && fresh.passwordHash !== localProject.passwordHash) {
-        await lockEdit();
-        set({ editMode: false });
-        return;
-      }
-    }
 
     const posByName = positionsToByName(tables, positions);
     const meta = buildTablesMeta(tables);
