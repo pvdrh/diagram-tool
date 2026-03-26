@@ -23,6 +23,7 @@ export default function SetPasswordModal() {
   const [error, setError] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -38,8 +39,16 @@ export default function SetPasswordModal() {
       setError('Passwords do not match');
       return;
     }
-    await createProjectWithPassword(name.trim(), password);
-    closeModal();
+    setLoading(true);
+    setError('');
+    try {
+      await createProjectWithPassword(name.trim(), password);
+      closeModal();
+    } catch {
+      setError('Failed to create project');
+    } finally {
+      setLoading(false);
+    }
   }, [name, password, confirm, createProjectWithPassword, closeModal]);
 
   return (
@@ -104,10 +113,10 @@ export default function SetPasswordModal() {
             </button>
             <button
               type="submit"
-              disabled={!name.trim() || !password.trim()}
+              disabled={loading || !name.trim() || !password.trim()}
               className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
             >
-              Create project
+              {loading ? 'Creating...' : 'Create project'}
             </button>
           </div>
         </form>

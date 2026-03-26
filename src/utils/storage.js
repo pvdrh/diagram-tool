@@ -25,16 +25,19 @@ export function setEditToken(token) {
 }
 
 export async function unlockEdit(password, projectId) {
-  const res = await fetch('/api/unlock', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, projectId }),
-  });
-  const data = await res.json();
-  if (data.ok && data.token) {
-    setEditToken(data.token);
-    return true;
-  }
+  try {
+    const res = await fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password, projectId }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.ok && data.token) {
+      setEditToken(data.token);
+      return true;
+    }
+  } catch { /* API not available */ }
   return false;
 }
 
@@ -55,6 +58,7 @@ export async function checkEditToken() {
   if (!token) return false;
   try {
     const res = await fetch(`/api/check-token?token=${encodeURIComponent(token)}`);
+    if (!res.ok) { setEditToken(null); return false; }
     const data = await res.json();
     if (!data.valid) {
       setEditToken(null);
@@ -75,6 +79,7 @@ export async function changePassword(oldPassword, newPassword, projectId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldPassword, newPassword, projectId, token }),
     });
+    if (!res.ok) return false;
     const data = await res.json();
     return data.ok === true;
   } catch {
