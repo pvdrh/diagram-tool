@@ -119,30 +119,15 @@ async function loadProjectsFromFile() {
     console.log('[Storage] Response status:', res.status);
     if (!res.ok) {
       console.error('[Storage] API returned error:', res.status, res.statusText);
-      return null;
+      return [];
     }
     const projects = await res.json();
     console.log('[Storage] Loaded', projects.length, 'projects from API');
-    // If API returns empty array, try localStorage as fallback
-    if (!projects || projects.length === 0) {
-      console.log('[Storage] API returned empty, trying localStorage fallback');
-      const stored = loadFromLocalStorage();
-      if (stored && stored.projects && stored.projects.length > 0) {
-        console.log('[Storage] Found', stored.projects.length, 'projects in localStorage');
-        return stored.projects;
-      }
-    }
-    return projects;
+    return projects || [];
   } catch (err) {
-    // API failed, fallback to localStorage
+    // API failed - return empty (no localStorage fallback)
     console.error('[Storage] API fetch failed:', err);
-    const stored = loadFromLocalStorage();
-    if (stored && stored.projects) {
-      console.log('[Storage] Using localStorage fallback:', stored.projects.length, 'projects');
-      return stored.projects;
-    }
-    console.log('[Storage] No projects found anywhere');
-    return null;
+    return [];
   }
 }
 
@@ -249,7 +234,8 @@ export async function loadFromStorage() {
       darkMode: meta?.darkMode || false,
     };
   }
-  return loadFromLocalStorage();
+  // Production mode: don't use localStorage, return empty
+  return { projects: [], darkMode: false };
 }
 
 /**

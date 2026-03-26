@@ -5,7 +5,6 @@ import { generateDBML } from '../utils/dbmlGenerator';
 import { loadFromStorage, saveProject, deleteProjectStorage, checkEditToken, unlockEdit, lockEdit, changePassword, hashPasswordClient, loadProjectFromFile } from '../utils/storage';
 import { DEFAULT_POSITIONS } from '../utils/sampleData';
 import { autoArrange } from '../utils/autoLayout';
-import { createShare, loadShare } from '../utils/shareLink';
 
 const MAX_HISTORY = 30;
 
@@ -110,7 +109,7 @@ const useStore = create((set, get) => ({
 
   // --- UI ---
   darkMode: false,
-  snapToGrid: false,
+  showGrid: true,
   highlightEdges: true,
   sidebarOpen: false,
   editMode: false, // false = view-only, true = can edit
@@ -613,8 +612,8 @@ const useStore = create((set, get) => ({
     set(s => ({ darkMode: !s.darkMode }));
   },
 
-  toggleSnapToGrid() {
-    set(s => ({ snapToGrid: !s.snapToGrid }));
+  toggleGrid() {
+    set(s => ({ showGrid: !s.showGrid }));
   },
 
   toggleHighlightEdges() {
@@ -663,60 +662,6 @@ const useStore = create((set, get) => ({
       }
     }
     return ok;
-  },
-
-  // --- Share Link ---
-  async generateShareLink() {
-    const { dbmlContent, tables, positions, relationships } = get();
-    const posByName = positionsToByName(tables, positions);
-    const meta = buildTablesMeta(tables);
-    const shareData = {
-      dbmlContent,
-      positionsByName: posByName,
-      tablesMeta: meta,
-    };
-    const shareId = await createShare(shareData);
-    if (!shareId) return null;
-    const url = `${window.location.origin}${window.location.pathname}#share=${shareId}`;
-    return url;
-  },
-
-  async loadSharedData() {
-    const hash = window.location.hash;
-    if (!hash.startsWith('#share=')) return false;
-    const shareId = hash.slice(7);
-    if (!shareId) return false;
-    const data = await loadShare(shareId);
-    if (!data || !data.dbmlContent) return false;
-
-    const parsed = parseDBML(data.dbmlContent);
-    const { tables, positions, relationships } = buildTablesFromParsed(
-      parsed, {}, data.positionsByName || {}, data.tablesMeta || {}
-    );
-
-    // Create a temporary read-only project
-    const id = nanoid();
-    const project = {
-      id,
-      name: 'Shared Diagram',
-      dbmlContent: data.dbmlContent,
-      positionsByName: data.positionsByName || {},
-      tablesMeta: data.tablesMeta || {},
-    };
-
-    set({
-      projects: [project],
-      activeProjectId: id,
-      tables,
-      relationships,
-      positions,
-      dbmlContent: data.dbmlContent,
-      editMode: false,
-    });
-
-    // Clean the URL hash
-    history.replaceState(null, '', window.location.pathname);
-    return true;
   },
 }));
 

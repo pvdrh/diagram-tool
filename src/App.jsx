@@ -17,24 +17,11 @@ export default function App() {
   const editMode = useStore(s => s.editMode);
   const initialize = useStore(s => s.initialize);
   const checkAuth = useStore(s => s.checkAuth);
-  const loadSharedData = useStore(s => s.loadSharedData);
 
   useEffect(() => {
-    // DEBUG: Clear localStorage if empty to force reload from server
-    const keyExists = localStorage.getItem('er-diagram-tool');
-    if (!keyExists) {
-      console.log('[App] localStorage is empty, will load projects from server');
-    }
-
-    // Check if URL has shared data first
-    loadSharedData().then(loaded => {
-      if (!loaded) {
-        console.log('[App] No shared data, initializing projects');
-        initialize();
-        checkAuth();
-      }
-    });
-  }, [initialize, checkAuth, loadSharedData]);
+    initialize();
+    checkAuth();
+  }, [initialize, checkAuth]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);

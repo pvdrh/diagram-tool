@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback } from 'react';
 import useStore from '../store/useStore';
 import { downloadFile, readFileAsText, exportAsPNG, exportAsSVG } from '../utils/exportUtils';
 import { importSQL } from '../utils/sqlImporter';
@@ -7,8 +7,8 @@ import { generateDBML } from '../utils/dbmlGenerator';
 export default function Toolbar() {
   const darkMode = useStore(s => s.darkMode);
   const toggleDarkMode = useStore(s => s.toggleDarkMode);
-  const toggleSnapToGrid = useStore(s => s.toggleSnapToGrid);
-  const snapToGrid = useStore(s => s.snapToGrid);
+  const toggleGrid = useStore(s => s.toggleGrid);
+  const showGrid = useStore(s => s.showGrid);
   const highlightEdges = useStore(s => s.highlightEdges);
   const toggleHighlightEdges = useStore(s => s.toggleHighlightEdges);
   const toggleSidebar = useStore(s => s.toggleSidebar);
@@ -26,9 +26,6 @@ export default function Toolbar() {
   const redo = useStore(s => s.redo);
   const editMode = useStore(s => s.editMode);
   const doLock = useStore(s => s.doLock);
-  const generateShareLink = useStore(s => s.generateShareLink);
-
-  const [shareCopied, setShareCopied] = useState(false);
 
   const fileInputRef = useRef(null);
   const sqlInputRef = useRef(null);
@@ -112,26 +109,6 @@ export default function Toolbar() {
     openModal('sql', null);
   }, [openModal]);
 
-  // --- Share Link ---
-  const handleShareLink = useCallback(async () => {
-    const url = await generateShareLink();
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2500);
-    } catch {
-      // Fallback
-      const textarea = document.createElement('textarea');
-      textarea.value = url;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2500);
-    }
-  }, [generateShareLink]);
-
   return (
     <div className="h-11 flex items-center px-3 gap-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-shrink-0">
       {/* Sidebar toggle */}
@@ -205,17 +182,6 @@ export default function Toolbar() {
           </button>
         </div>
       </div>
-
-      {/* Share link */}
-      <button
-        onClick={handleShareLink}
-        className={`toolbar-btn ${shareCopied ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : ''}`}
-        title="Create a sharing link (view-only)"
-      >
-        {shareCopied ? '✓ Copied!' : '🔗 Share'}
-      </button>
-
-      <div className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
 
       {/* Auto arrange dropdown */}
       <div className="relative group">
@@ -293,11 +259,11 @@ export default function Toolbar() {
         {highlightEdges ? '🔗 Edges' : '🔗'}
       </button>
 
-      {/* Snap to grid */}
+      {/* Grid */}
       <button
-        onClick={toggleSnapToGrid}
-        className={`toolbar-btn ${snapToGrid ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''}`}
-        title={snapToGrid ? 'Turn off snap to grid' : 'Turn on snap to grid'}
+        onClick={toggleGrid}
+        className={`toolbar-btn ${showGrid ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''}`}
+        title={showGrid ? 'Turn off grid' : 'Turn on grid'}
       >
         ⊞ Grid
       </button>

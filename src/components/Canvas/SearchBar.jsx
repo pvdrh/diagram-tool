@@ -77,7 +77,7 @@ export default function SearchBar() {
           ref={inputRef}
           type="text"
           className="w-48 px-2 py-1.5 text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100"
-          placeholder="Tìm table hoặc column..."
+          placeholder="Search something..."
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => {

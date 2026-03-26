@@ -24,7 +24,7 @@ function DiagramCanvasInner() {
   const tables = useStore(s => s.tables);
   const relationships = useStore(s => s.relationships);
   const positions = useStore(s => s.positions);
-  const snapToGrid = useStore(s => s.snapToGrid);
+  const showGrid = useStore(s => s.showGrid);
   const darkMode = useStore(s => s.darkMode);
   const editMode = useStore(s => s.editMode);
   const addTable = useStore(s => s.addTable);
@@ -191,7 +191,7 @@ function DiagramCanvasInner() {
         nodesDraggable={editMode}
         nodesConnectable={editMode}
         elementsSelectable={true}
-        snapToGrid={snapToGrid}
+        snapToGrid={showGrid}
         snapGrid={[15, 15]}
         fitView
         minZoom={0.1}
@@ -205,12 +205,14 @@ function DiagramCanvasInner() {
         multiSelectionKeyCode="Shift"
         proOptions={{ hideAttribution: true }}
       >
-        <Background
-          variant={snapToGrid ? 'lines' : 'dots'}
-          color={darkMode ? '#374151' : '#e5e7eb'}
-          gap={snapToGrid ? 15 : 20}
-          size={snapToGrid ? 0.5 : 1}
-        />
+        {showGrid && (
+          <Background
+            variant="lines"
+            color={darkMode ? '#374151' : '#e5e7eb'}
+            gap={15}
+            size={0.5}
+          />
+        )}
         <Controls showInteractive={false} />
         <MiniMap
           nodeColor={node => {
