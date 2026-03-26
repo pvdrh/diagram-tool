@@ -1,4 +1,3 @@
-const STORAGE_KEY = 'er-diagram-tool';
 const TOKEN_KEY = 'er-diagram-edit-token';
 const LOCAL_TOKEN_PREFIX = 'local:';
 
@@ -54,9 +53,8 @@ export async function unlockEdit(password, projectId) {
     } catch { /* API not available */ }
     return false;
   }
-  // Production: verify password against hash stored in localStorage
-  const local = loadFromLocalStorage();
-  const project = local?.projects?.find(p => p.id === projectId);
+  // Production: fetch the project from Vercel Blob and verify hash client-side
+  const project = await loadProjectFromFile(projectId);
   if (!project?.passwordHash) return false;
   const hash = await hashPasswordBrowser(password);
   if (hash !== project.passwordHash) return false;
@@ -114,15 +112,14 @@ export async function changePassword(oldPassword, newPassword, projectId) {
       return false;
     }
   }
-  // Production: verify old password and update hash directly in localStorage
-  const local = loadFromLocalStorage();
-  const project = local?.projects?.find(p => p.id === projectId);
+  // Production: verify old password, update hash in Vercel Blob
+  const project = await loadProjectFromFile(projectId);
   if (!project?.passwordHash) return false;
   const oldHash = await hashPasswordBrowser(oldPassword);
   if (oldHash !== project.passwordHash) return false;
   const newHash = await hashPasswordBrowser(newPassword);
   project.passwordHash = newHash;
-  saveToLocalStorage(local);
+  await saveProjectToFile(projectId, project);
   return newHash; // return new hash so store can update state
 }
 
@@ -246,48 +243,21 @@ async function saveMetaToFile(data) {
   }
 }
 
-// ---- localStorage fallback ----
-
-function loadFromLocalStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function saveToLocalStorage(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // storage full or unavailable
-  }
-}
-
 // ---- Public API ----
 
 /**
- * Load all data: in dev mode, loads from per-project files.
- * Returns { projects: [...], meta: { darkMode, ... } }
+ * Load all data. Both dev (Vite middleware) and prod (Vercel serverless)
+ * use the same /api/* routes — we always call them.
  */
 export async function loadFromStorage() {
-  if (isDev) {
-    const [projects, meta] = await Promise.all([
-      loadProjectsFromFile(),
-      loadMetaFromFile(),
-    ]);
-    return {
-      projects: projects || [],
-      darkMode: meta?.darkMode || false,
-    };
-  }
-  // Production mode: load from localStorage
-  const local = loadFromLocalStorage();
+  const [projects, meta] = await Promise.all([
+    loadProjectsFromFile(),
+    loadMetaFromFile(),
+  ]);
   return {
-    projects: local?.projects || [],
-    darkMode: local?.darkMode || false,
+    projects: projects || [],
+    darkMode: meta?.darkMode || false,
+    activeProjectId: meta?.activeProjectId || null,
   };
 }
 
@@ -295,43 +265,19 @@ export async function loadFromStorage() {
  * Save a single project to storage.
  */
 export async function saveProject(projectId, projectData) {
-  // Update localStorage (full state)
-  const local = loadFromLocalStorage() || { projects: [], darkMode: false };
-  const idx = local.projects.findIndex(p => p.id === projectId);
-  if (idx >= 0) {
-    local.projects[idx] = projectData;
-  } else {
-    local.projects.push(projectData);
-  }
-  saveToLocalStorage(local);
-
-  if (isDev) {
-    await saveProjectToFile(projectId, projectData);
-  }
+  await saveProjectToFile(projectId, projectData);
 }
 
 /**
  * Delete a project from storage.
  */
 export async function deleteProjectStorage(projectId) {
-  const local = loadFromLocalStorage() || { projects: [], darkMode: false };
-  local.projects = local.projects.filter(p => p.id !== projectId);
-  saveToLocalStorage(local);
-
-  if (isDev) {
-    await deleteProjectFromFile(projectId);
-  }
+  await deleteProjectFromFile(projectId);
 }
 
 /**
  * Save meta (darkMode, etc.) to storage.
  */
 export async function saveMeta(meta) {
-  const local = loadFromLocalStorage() || { projects: [], darkMode: false };
-  local.darkMode = meta.darkMode;
-  saveToLocalStorage(local);
-
-  if (isDev) {
-    await saveMetaToFile(meta);
-  }
+  await saveMetaToFile(meta);
 }

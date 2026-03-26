@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import { parseDBML } from '../utils/dbmlParser';
 import { generateDBML } from '../utils/dbmlGenerator';
-import { loadFromStorage, saveProject, deleteProjectStorage, checkEditToken, unlockEdit, lockEdit, changePassword, hashPasswordClient, loadProjectFromFile } from '../utils/storage';
+import { loadFromStorage, saveProject, saveMeta, deleteProjectStorage, checkEditToken, unlockEdit, lockEdit, changePassword, hashPasswordClient, loadProjectFromFile } from '../utils/storage';
 import { DEFAULT_POSITIONS } from '../utils/sampleData';
 import { autoArrange } from '../utils/autoLayout';
 
@@ -172,6 +172,10 @@ const useStore = create((set, get) => ({
     console.log('[Store] Initializing projects from storage...');
     const saved = await loadFromStorage();
     console.log('[Store] Loaded data:', saved);
+
+    // darkMode comes from meta, not from project
+    const darkMode = saved.darkMode || false;
+
     if (saved && saved.projects && saved.projects.length > 0) {
       console.log('[Store] Found', saved.projects.length, 'projects');
       const activeId = saved.activeProjectId || saved.projects[0].id;
@@ -190,7 +194,7 @@ const useStore = create((set, get) => ({
         relationships,
         positions,
         dbmlContent: project.dbmlContent || '',
-        darkMode: project.darkMode || false,
+        darkMode,
       });
     } else {
       // No saved data — start with empty project list
@@ -202,25 +206,29 @@ const useStore = create((set, get) => ({
         relationships: [],
         positions: {},
         dbmlContent: '',
+        darkMode,
       });
     }
   },
 
   // --- Save to storage ---
   async saveToStorage() {
-    const { projects, activeProjectId, tables, relationships, positions, dbmlContent, darkMode, editMode } = get();
+    const { projects, activeProjectId, tables, positions, dbmlContent, darkMode } = get();
     if (!activeProjectId) return;
 
     const localProject = projects.find(p => p.id === activeProjectId);
     if (!localProject) return;
 
     const posByName = positionsToByName(tables, positions);
-    const meta = buildTablesMeta(tables);
-    const updatedProject = { ...localProject, dbmlContent, darkMode, positionsByName: posByName, tablesMeta: meta };
+    const tablesMeta = buildTablesMeta(tables);
+    const updatedProject = { ...localProject, dbmlContent, positionsByName: posByName, tablesMeta };
     const updatedProjects = projects.map(p =>
       p.id === activeProjectId ? updatedProject : p
     );
-    await saveProject(activeProjectId, updatedProject);
+    await Promise.all([
+      saveProject(activeProjectId, updatedProject),
+      saveMeta({ darkMode, activeProjectId }),
+    ]);
     set({ projects: updatedProjects });
   },
 
@@ -257,12 +265,16 @@ const useStore = create((set, get) => ({
       _future: [],
     });
 
+    // Keep blob meta in sync (meta.json is the source of truth for activeProjectId/darkMode)
+    await saveMeta({ darkMode, activeProjectId: id });
+
     // Now unlock with the password
     await unlockEdit(password, id);
     set({ editMode: true });
   },
 
   async switchProject(id) {
+    const darkMode = get().darkMode;
     await get().saveToStorage();
     // Lock current session before switching
     if (get().editMode) {
@@ -280,11 +292,14 @@ const useStore = create((set, get) => ({
       relationships,
       positions,
       dbmlContent: project.dbmlContent || '',
-      darkMode: project.darkMode || false,
+      // darkMode is stored in meta.json, not inside a project blob
+      darkMode,
       editMode: false,
       _history: [],
       _future: [],
     });
+
+    await saveMeta({ darkMode, activeProjectId: id });
   },
 
   renameProject(id, name) {
@@ -294,7 +309,7 @@ const useStore = create((set, get) => ({
   },
 
   async deleteProject(id) {
-    const { projects, activeProjectId } = get();
+    const { projects, activeProjectId, darkMode } = get();
     await deleteProjectStorage(id);
     const remaining = projects.filter(p => p.id !== id);
     if (remaining.length === 0) {
@@ -309,6 +324,8 @@ const useStore = create((set, get) => ({
         _history: [],
         _future: [],
       });
+
+      await saveMeta({ darkMode, activeProjectId: null });
     } else if (id === activeProjectId) {
       const next = remaining[0];
       const parsed = parseDBML(next.dbmlContent || '');
@@ -326,6 +343,8 @@ const useStore = create((set, get) => ({
         _history: [],
         _future: [],
       });
+
+      await saveMeta({ darkMode, activeProjectId: next.id });
     } else {
       set({ projects: remaining });
     }
