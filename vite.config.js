@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 
 const DATA_DIR = 'data';
 const PROJECTS_DIR = path.join(DATA_DIR, 'projects');
+const SHARES_DIR = path.join(DATA_DIR, 'shares');
 const META_FILE = path.join(DATA_DIR, 'meta.json');
 
 // Active edit tokens (in-memory, cleared on server restart)
@@ -27,6 +28,9 @@ function hashPassword(pw) {
 function ensureDirs() {
   if (!fs.existsSync(PROJECTS_DIR)) {
     fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(SHARES_DIR)) {
+    fs.mkdirSync(SHARES_DIR, { recursive: true });
   }
 }
 
@@ -227,19 +231,23 @@ function localDataPlugin() {
         next();
       });
 
-      // GET /api/projects — list all projects (summary: id, name, hasPassword)
-      server.middlewares.use('/api/projects', async (req, res, next) => {
-        if (req.method !== 'GET') return next();
-        const projects = listProjects();
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(projects));
-      });
-
+      // GET /api/projects — list all projects
       // /api/project/:id — GET read, POST write, DELETE remove
+      // IMPORTANT: single handler to avoid /api/projects vs /api/project routing conflict
       server.middlewares.use('/api/project', async (req, res, next) => {
-        // Extract project ID from URL: /api/project/<id>
-        const urlPath = req.url.split('?')[0];
-        const projectId = urlPath.replace(/^\//, '');
+        const urlPath = req.url.split('?')[0].replace(/^\//, '');
+
+        // /api/projects (urlPath = 's' after stripping '/api/project' prefix + leading slash)
+        if (urlPath === 's') {
+          if (req.method !== 'GET') return next();
+          const projects = listProjects();
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(projects));
+          return;
+        }
+
+        // /api/project/<id>
+        const projectId = urlPath;
         if (!projectId) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: 'Missing project ID' }));
@@ -296,6 +304,46 @@ function localDataPlugin() {
           deleteProjectFile(projectId);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+
+        next();
+      });
+
+      // POST /api/share — create a share, returns short ID
+      server.middlewares.use('/api/share', async (req, res, next) => {
+        if (req.method === 'POST') {
+          const body = await readBody(req);
+          try {
+            const data = JSON.parse(body);
+            const id = crypto.randomBytes(4).toString('hex'); // 8-char hex ID
+            ensureDirs();
+            fs.writeFileSync(path.resolve(SHARES_DIR, `${id}.json`), JSON.stringify(data), 'utf-8');
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true, id }));
+          } catch (err) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
+        // GET /api/share/<id>
+        if (req.method === 'GET') {
+          const shareId = req.url.split('?')[0].replace(/^\//, '');
+          if (!shareId) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Missing share ID' }));
+            return;
+          }
+          const filePath = path.resolve(SHARES_DIR, `${shareId}.json`);
+          if (fs.existsSync(filePath)) {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(fs.readFileSync(filePath, 'utf-8'));
+          } else {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: 'Share not found' }));
+          }
           return;
         }
 

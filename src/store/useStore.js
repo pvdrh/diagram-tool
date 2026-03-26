@@ -5,7 +5,7 @@ import { generateDBML } from '../utils/dbmlGenerator';
 import { loadFromStorage, saveProject, deleteProjectStorage, checkEditToken, unlockEdit, lockEdit, changePassword, hashPasswordClient, loadProjectFromFile } from '../utils/storage';
 import { DEFAULT_POSITIONS } from '../utils/sampleData';
 import { autoArrange } from '../utils/autoLayout';
-import { encodeShareData, decodeShareData } from '../utils/shareLink';
+import { createShare, loadShare } from '../utils/shareLink';
 
 const MAX_HISTORY = 30;
 
@@ -264,6 +264,10 @@ const useStore = create((set, get) => ({
 
   async switchProject(id) {
     await get().saveToStorage();
+    // Lock current session before switching
+    if (get().editMode) {
+      await lockEdit();
+    }
     const project = get().projects.find(p => p.id === id);
     if (!project) return;
     const parsed = parseDBML(project.dbmlContent || '');
@@ -277,7 +281,7 @@ const useStore = create((set, get) => ({
       positions,
       dbmlContent: project.dbmlContent || '',
       darkMode: project.darkMode || false,
-      editMode: false, // Lock when switching — each project has its own password
+      editMode: false,
       _history: [],
       _future: [],
     });
@@ -654,13 +658,15 @@ const useStore = create((set, get) => ({
     const projectId = get().activeProjectId;
     const ok = await changePassword(oldPassword, newPassword, projectId);
     if (ok) {
-      // Update local project hash
-      const newHash = await hashPasswordClient(newPassword);
-      set(s => ({
-        projects: s.projects.map(p =>
-          p.id === projectId ? { ...p, passwordHash: newHash } : p
-        ),
-      }));
+      // Re-read the project from file to get the server-computed hash
+      const fresh = await loadProjectFromFile(projectId);
+      if (fresh && fresh.passwordHash) {
+        set(s => ({
+          projects: s.projects.map(p =>
+            p.id === projectId ? { ...p, passwordHash: fresh.passwordHash } : p
+          ),
+        }));
+      }
     }
     return ok;
   },
@@ -675,16 +681,18 @@ const useStore = create((set, get) => ({
       positionsByName: posByName,
       tablesMeta: meta,
     };
-    const encoded = await encodeShareData(shareData);
-    const url = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
+    const shareId = await createShare(shareData);
+    if (!shareId) return null;
+    const url = `${window.location.origin}${window.location.pathname}#share=${shareId}`;
     return url;
   },
 
   async loadSharedData() {
     const hash = window.location.hash;
     if (!hash.startsWith('#share=')) return false;
-    const encoded = hash.slice(7);
-    const data = await decodeShareData(encoded);
+    const shareId = hash.slice(7);
+    if (!shareId) return false;
+    const data = await loadShare(shareId);
     if (!data || !data.dbmlContent) return false;
 
     const parsed = parseDBML(data.dbmlContent);

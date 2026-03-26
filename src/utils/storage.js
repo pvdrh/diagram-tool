@@ -220,12 +220,10 @@ export async function loadFromStorage() {
       loadProjectsFromFile(),
       loadMetaFromFile(),
     ]);
-    if (projects) {
-      return {
-        projects,
-        darkMode: meta?.darkMode || false,
-      };
-    }
+    return {
+      projects: projects || [],
+      darkMode: meta?.darkMode || false,
+    };
   }
   return loadFromLocalStorage();
 }
