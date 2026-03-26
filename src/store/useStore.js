@@ -656,14 +656,23 @@ const useStore = create((set, get) => ({
 
   async changeProjectPassword(oldPassword, newPassword) {
     const projectId = get().activeProjectId;
-    const ok = await changePassword(oldPassword, newPassword, projectId);
+    const result = await changePassword(oldPassword, newPassword, projectId);
+    // changePassword returns newHash (string) in production, true in dev
+    const ok = !!result;
     if (ok) {
-      // Re-read the project from file to get the server-computed hash
-      const fresh = await loadProjectFromFile(projectId);
-      if (fresh && fresh.passwordHash) {
+      let newHash;
+      if (typeof result === 'string') {
+        // Production: hash returned directly
+        newHash = result;
+      } else {
+        // Dev: re-read from file to get server-computed hash
+        const fresh = await loadProjectFromFile(projectId);
+        newHash = fresh?.passwordHash;
+      }
+      if (newHash) {
         set(s => ({
           projects: s.projects.map(p =>
-            p.id === projectId ? { ...p, passwordHash: fresh.passwordHash } : p
+            p.id === projectId ? { ...p, passwordHash: newHash } : p
           ),
         }));
       }

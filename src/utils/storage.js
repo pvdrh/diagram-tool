@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'er-diagram-tool';
 const TOKEN_KEY = 'er-diagram-edit-token';
+const LOCAL_TOKEN_PREFIX = 'local:';
 
 // Detect dev mode (Vite sets this)
 const isDev = import.meta.env.DEV;
@@ -24,26 +25,49 @@ export function setEditToken(token) {
   } catch { /* ignore */ }
 }
 
+// ---- Browser-native SHA-256 (works in all modern browsers + Vercel edge) ----
+
+async function hashPasswordBrowser(password) {
+  const data = new TextEncoder().encode(password);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// ---- Auth operations ----
+
 export async function unlockEdit(password, projectId) {
-  try {
-    const res = await fetch('/api/unlock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, projectId }),
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    if (data.ok && data.token) {
-      setEditToken(data.token);
-      return true;
-    }
-  } catch { /* API not available */ }
-  return false;
+  if (isDev) {
+    try {
+      const res = await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, projectId }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.ok && data.token) {
+        setEditToken(data.token);
+        return true;
+      }
+    } catch { /* API not available */ }
+    return false;
+  }
+  // Production: verify password against hash stored in localStorage
+  const local = loadFromLocalStorage();
+  const project = local?.projects?.find(p => p.id === projectId);
+  if (!project?.passwordHash) return false;
+  const hash = await hashPasswordBrowser(password);
+  if (hash !== project.passwordHash) return false;
+  setEditToken(`${LOCAL_TOKEN_PREFIX}${projectId}`);
+  return true;
 }
 
 export async function lockEdit() {
   const token = getEditToken();
-  if (token) {
+  // In dev mode, tell server to invalidate token
+  if (isDev && token && !token.startsWith(LOCAL_TOKEN_PREFIX)) {
     await fetch('/api/lock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -56,57 +80,80 @@ export async function lockEdit() {
 export async function checkEditToken() {
   const token = getEditToken();
   if (!token) return false;
-  try {
-    const res = await fetch(`/api/check-token?token=${encodeURIComponent(token)}`);
-    if (!res.ok) { setEditToken(null); return false; }
-    const data = await res.json();
-    if (!data.valid) {
-      setEditToken(null);
+  // Local token (production or local fallback) — just check it exists
+  if (token.startsWith(LOCAL_TOKEN_PREFIX)) return true;
+  // Dev mode: verify with server
+  if (isDev) {
+    try {
+      const res = await fetch(`/api/check-token?token=${encodeURIComponent(token)}`);
+      if (!res.ok) { setEditToken(null); return false; }
+      const data = await res.json();
+      if (!data.valid) { setEditToken(null); return false; }
+      return true;
+    } catch {
       return false;
     }
-    return true;
-  } catch {
-    return false;
   }
+  return false;
 }
 
 export async function changePassword(oldPassword, newPassword, projectId) {
-  const token = getEditToken();
-  if (!token) return false;
-  try {
-    const res = await fetch('/api/change-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPassword, newPassword, projectId, token }),
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data.ok === true;
-  } catch {
-    return false;
+  if (isDev) {
+    const token = getEditToken();
+    if (!token) return false;
+    try {
+      const res = await fetch('/api/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPassword, newPassword, projectId, token }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.ok === true;
+    } catch {
+      return false;
+    }
   }
+  // Production: verify old password and update hash directly in localStorage
+  const local = loadFromLocalStorage();
+  const project = local?.projects?.find(p => p.id === projectId);
+  if (!project?.passwordHash) return false;
+  const oldHash = await hashPasswordBrowser(oldPassword);
+  if (oldHash !== project.passwordHash) return false;
+  const newHash = await hashPasswordBrowser(newPassword);
+  project.passwordHash = newHash;
+  saveToLocalStorage(local);
+  return newHash; // return new hash so store can update state
 }
 
 /**
- * Hash password via server (works on both HTTP and HTTPS).
+ * Hash a password. Uses browser crypto.subtle (SHA-256) — same output as
+ * the server-side Node.js SHA-256, so hashes are compatible across envs.
  */
 export async function hashPasswordClient(password) {
   try {
-    const res = await fetch('/api/hash-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json();
-    if (data.hash) return data.hash;
-  } catch { /* fallback below */ }
-  // Fallback if server unavailable: simple deterministic hash
-  let h = 0x811c9dc5;
-  for (let i = 0; i < password.length; i++) {
-    h ^= password.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
+    return await hashPasswordBrowser(password);
+  } catch {
+    // Fallback: call server in dev mode
+    if (isDev) {
+      try {
+        const res = await fetch('/api/hash-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (data.hash) return data.hash;
+      } catch { /* ignore */ }
+    }
+    // Last-resort weak hash
+    let h = 0x811c9dc5;
+    for (let i = 0; i < password.length; i++) {
+      h ^= password.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return 'fnv:' + (h >>> 0).toString(16).padStart(8, '0');
   }
-  return 'fnv:' + (h >>> 0).toString(16).padStart(8, '0');
 }
 
 // ---- Per-project file-based storage (dev mode via Vite plugin) ----
@@ -236,8 +283,12 @@ export async function loadFromStorage() {
       darkMode: meta?.darkMode || false,
     };
   }
-  // Production mode: don't use localStorage, return empty
-  return { projects: [], darkMode: false };
+  // Production mode: load from localStorage
+  const local = loadFromLocalStorage();
+  return {
+    projects: local?.projects || [],
+    darkMode: local?.darkMode || false,
+  };
 }
 
 /**
