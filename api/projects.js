@@ -1,33 +1,31 @@
-import { list } from '@vercel/blob';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const BLOB_PREFIX = 'projects/';
+const PROJECTS_DIR = path.resolve('data/projects');
+
+function ensureDirs() {
+  if (!fs.existsSync(PROJECTS_DIR)) {
+    fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+  }
+}
 
 function json(res, data, status = 200) {
   res.status(status).setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(data));
 }
 
-export default async function handler(req, res) {
+export default function handler(req, res) {
   if (req.method === 'GET') {
-    try {
-      // List all project blobs
-      const { blobs } = await list({ prefix: BLOB_PREFIX });
-      const projects = await Promise.all(
-        blobs.map(async (blob) => {
-          try {
-            const r = await fetch(blob.url);
-            if (!r.ok) return null;
-            return await r.json();
-          } catch {
-            return null;
-          }
-        })
-      );
-      return json(res, projects.filter(Boolean));
-    } catch (error) {
-      console.error("Vercel Blob API Error:", error);
-      return json(res, { error: error.message || 'Internal Server Error' }, 500);
+    ensureDirs();
+    const files = fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith('.json'));
+    const projects = [];
+    for (const f of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(PROJECTS_DIR, f), 'utf-8'));
+        projects.push(data);
+      } catch { /* skip corrupt files */ }
     }
+    return json(res, projects);
   }
   return json(res, { error: 'Method not allowed' }, 405);
 }
